@@ -92,7 +92,7 @@ android {
         applicationId 'com.taiyarineetki.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 17
+        versionCode 3
         versionName "1.0.4"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
@@ -104,28 +104,22 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-         release {
-        storeFile file('upload-keystore.jks')
-        storePassword 'tyari-neet-ios'
-        keyAlias 'upload'
-        keyPassword 'tyari-neet-ios'
-    }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
-          release {
-        signingConfig signingConfigs.release
-
-        def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
-        shrinkResources enableShrinkResources.toBoolean()
-        minifyEnabled enableMinifyInReleaseBuilds
-        proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-        def enablePngCrunchInRelease = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
-        crunchPngs enablePngCrunchInRelease.toBoolean()
-    }
-
+        release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.debug
+            def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
+            shrinkResources enableShrinkResources.toBoolean()
+            minifyEnabled enableMinifyInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            def enablePngCrunchInRelease = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
+            crunchPngs enablePngCrunchInRelease.toBoolean()
+        }
     }
     packagingOptions {
         jniLibs {
@@ -161,7 +155,6 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-    implementation 'com.razorpay:checkout:1.6.41'  // force latest native SDK
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
