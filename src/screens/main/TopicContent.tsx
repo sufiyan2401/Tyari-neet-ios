@@ -76,8 +76,8 @@ export const TopicContent = ({ navigation, route }: TopicContentProps) => {
   React.useEffect(() => {
     if (!topicId) return;
     if (isPremiumTopic && !hasPremium) return;
-    markCompleted(topicId);
-  }, [topicId, isPremiumTopic, hasPremium, markCompleted]);
+    markCompleted(topicId, topic?.name);
+  }, [topicId, isPremiumTopic, hasPremium, markCompleted, topic?.name]);
 
   // Protect lesson content from screenshots / screen recordings (best-effort).
   // NOTE: Web cannot be reliably protected, so keep this native-only.
@@ -118,7 +118,9 @@ export const TopicContent = ({ navigation, route }: TopicContentProps) => {
   const rawURL = (slotIsURL ? slotValue : String(effectiveTopic?.contentURL || '')).trim();
   const isCanvaContent = /canva\.com/i.test(rawURL);
   const isInsecureRemoteUrl = /^http:\/\//i.test(rawURL) && !/^http:\/\/(localhost|127\.0\.0\.1)/i.test(rawURL);
-  const normalizedURL = isInsecureRemoteUrl ? rawURL.replace(/^http:\/\//i, 'https://') : rawURL;
+  const secureURL = isInsecureRemoteUrl ? rawURL.replace(/^http:\/\//i, 'https://') : rawURL;
+  // Android can't render PDFs in WebView — use server-generated HTML version
+  const normalizedURL = /\.pdf(\?|$)/i.test(secureURL) ? secureURL.replace(/\.pdf(\?|$)/i, '/index.html$1') : secureURL;
 
   // Keep hook execution order stable across all render branches.
   React.useEffect(() => {
@@ -283,7 +285,6 @@ export const TopicContent = ({ navigation, route }: TopicContentProps) => {
     );
   }
 
-  // Keep Canva URL exactly as received from backend.
   const webViewSource = { uri: normalizedURL };
 
   return (

@@ -103,15 +103,31 @@ export const Tests = ({ navigation }: TestsScreenProps) => {
     if (!selectedSubject || !selectedType || !selectedClassId) return;
     const cls = classOptions.find((c) => c.id === selectedClassId);
     setShowClassModal(false);
-    navigation.navigate('DailyTestChapter', {
-      subjectId: selectedSubject.id,
-      subjectName: selectedSubject.name,
-      subjectEmoji: selectedSubject.emoji,
-      classId: selectedClassId,
-      className: (cls as any)?.name || 'Class',
-      testType: selectedType.id,
-      testTypeTitle: selectedType.title,
-    });
+
+    if (selectedType.id === 'full') {
+      // Full Syllabus — skip chapter, go directly to test
+      navigation.navigate('TestMCQ', {
+        testName: `Full Syllabus · ${selectedSubject.name}`,
+        subjectName: selectedSubject.name,
+        subjectEmoji: selectedSubject.emoji,
+        subjectId: selectedSubject.id,
+        classId: selectedClassId,
+        chapterId: '',
+        chapterName: 'Full Syllabus',
+        chapterNum: '',
+        totalTime: 200 * 60,
+      });
+    } else {
+      navigation.navigate('DailyTestChapter', {
+        subjectId: selectedSubject.id,
+        subjectName: selectedSubject.name,
+        subjectEmoji: selectedSubject.emoji,
+        classId: selectedClassId,
+        className: (cls as any)?.name || 'Class',
+        testType: selectedType.id,
+        testTypeTitle: selectedType.title,
+      });
+    }
   };
 
   const handleBack = () => {

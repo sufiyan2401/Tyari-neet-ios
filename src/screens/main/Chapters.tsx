@@ -29,6 +29,7 @@ type ChaptersScreenProps = {
       subjectTitle?: string;
       classId?: string;
       featureName?: string;
+      freeOnly?: boolean;
     };
   };
 };
@@ -42,6 +43,7 @@ export const Chapters = ({ navigation, route }: ChaptersScreenProps) => {
   const subjectTitle = route?.params?.subjectTitle;
   const initialClassId = route?.params?.classId;
   const featureName = route?.params?.featureName;
+  const freeOnly = route?.params?.freeOnly ?? false;
 
   if (!subjectId || !subjectTitle) {
     return (
@@ -105,6 +107,7 @@ export const Chapters = ({ navigation, route }: ChaptersScreenProps) => {
       chapterTitle: chapter.name,
       chapterNumber: chapter.number,
       featureName,
+      freeOnly,
     });
   };
 

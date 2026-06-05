@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type SubjectsScreenProps = {
   navigation: any;
-  route?: { params?: { featureName?: string } };
+  route?: { params?: { featureName?: string; freeOnly?: boolean } };
 };
 
 type SubjectMeta = {
@@ -59,6 +59,7 @@ const getMetaFor = (name: string): SubjectMeta => {
 
 export const Subjects = ({ navigation, route }: SubjectsScreenProps) => {
   const featureName = route?.params?.featureName;
+  const freeOnly = route?.params?.freeOnly ?? false;
   const { isGuest } = useAuth();
   const { data, isLoading, error } = useGetAllSubjects({ enabled: !isGuest });
   const { data: classesData } = useGetAllClasses({ enabled: !isGuest });
@@ -110,6 +111,7 @@ export const Subjects = ({ navigation, route }: SubjectsScreenProps) => {
       subjectTitle: subject.name,
       classId,
       featureName,
+      freeOnly,
     });
   };
 
@@ -133,7 +135,7 @@ export const Subjects = ({ navigation, route }: SubjectsScreenProps) => {
     <LinearGradient colors={['#F5A623', '#F9C45A', '#FCDA3E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.safeArea}>
     <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top']}>
       <ScrollView
-        style={{ flex: 1, backgroundColor: 'transparent' }}
+        style={{ flex: 1, backgroundColor: '#FFF8E8' }}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
@@ -143,12 +145,12 @@ export const Subjects = ({ navigation, route }: SubjectsScreenProps) => {
             <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.7}>
               <ChevronLeft size={22} color="#111" />
             </TouchableOpacity>
-            <Text style={styles.topTitle}>{featureName || 'Subjects'}</Text>
+            <Text style={styles.topTitle}>{freeOnly ? 'Free Content' : featureName || 'Subjects'}</Text>
           </View>
 
           <View style={styles.headerPanel}>
-            <Text style={styles.headerGreet}>Choose your subject 📚</Text>
-            <Text style={styles.headerTitle}>{featureName ? featureName : 'Explore & Master NEET'}</Text>
+            <Text style={styles.headerGreet}>{freeOnly ? 'Explore free study material 📚' : 'Choose your subject 📚'}</Text>
+            <Text style={styles.headerTitle}>{freeOnly ? 'Free Topics' : featureName ? featureName : 'Explore & Master NEET'}</Text>
           </View>
         </View>
 
@@ -212,17 +214,6 @@ export const Subjects = ({ navigation, route }: SubjectsScreenProps) => {
             })}
           </View>
 
-          {/* Info Bar */}
-          <TouchableOpacity style={styles.infoBar} activeOpacity={0.85} onPress={() => navigation.navigate('MainTabs', { screen: 'TestsTab' })}>
-            <View style={styles.infoIcon}>
-              <Text style={{ fontSize: 20 }}>💡</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.infoTitle}>Take Diagnostic Test</Text>
-              <Text style={styles.infoSub}>Find out which subject needs your focus first</Text>
-            </View>
-            <Text style={styles.infoArrow}>›</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -245,7 +236,7 @@ const styles = StyleSheet.create({
     flex: 1, justifyContent: 'center', alignItems: 'center',
     backgroundColor: '#FFF8E8',
   },
-  scroll: { paddingBottom: 120, backgroundColor: '#FFF8E8' },
+  scroll: { paddingBottom: 30, flexGrow: 1 },
 
   /* Yellow header */
   yellowSection: { backgroundColor: 'transparent' },
@@ -348,30 +339,6 @@ const styles = StyleSheet.create({
     fontSize: 9, color: '#888',
     marginTop: 5, fontWeight: '600',
   },
-
-  /* Info bar */
-  infoBar: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 14,
-    marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 1,
-  },
-  infoIcon: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: '#FFF8E1',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  infoTitle: { fontSize: 13, fontWeight: '800', color: '#111', marginBottom: 2 },
-  infoSub: { fontSize: 11, color: '#666', lineHeight: 14 },
-  infoArrow: { color: '#92400E', fontSize: 24, fontWeight: '900' },
 
   errorText: { fontSize: 16, color: '#666' },
 });

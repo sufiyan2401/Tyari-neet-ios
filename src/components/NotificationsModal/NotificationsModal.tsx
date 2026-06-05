@@ -1,6 +1,9 @@
+import { useAuth } from '@/contexts/AuthContext';
+import { useGetNotifications, useMarkNotificationRead, TNotification } from '@/hooks/api/notifications';
 import { Bell, X } from 'lucide-react-native';
 import React from 'react';
 import {
+  ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
@@ -15,56 +18,32 @@ type Props = {
   onClose: () => void;
 };
 
-type Notification = {
-  id: string;
-  icon: string;
-  title: string;
-  message: string;
-  time: string;
-  unread?: boolean;
+const timeAgo = (dateStr: string) => {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 };
 
-const SAMPLE_NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    icon: '🔥',
-    title: 'Keep your streak alive!',
-    message: 'You have studied today. Great work — keep going tomorrow!',
-    time: 'Just now',
-    unread: true,
-  },
-  {
-    id: '2',
-    icon: '📚',
-    title: 'New chapter unlocked',
-    message: 'Biology — Cell Structure and Functions is now available.',
-    time: '2 hours ago',
-    unread: true,
-  },
-  {
-    id: '3',
-    icon: '🎯',
-    title: 'Daily Practice Test ready',
-    message: 'Your Daily Practice Test for today is ready. Take 15 minutes!',
-    time: '5 hours ago',
-  },
-  {
-    id: '4',
-    icon: '💡',
-    title: 'Tip of the day',
-    message: 'Solve at least 5 PYQs every day to boost retention.',
-    time: 'Yesterday',
-  },
-  {
-    id: '5',
-    icon: '🏆',
-    title: 'Weekly Test results',
-    message: 'You scored 82% in the last weekly test. Top 15%!',
-    time: '3 days ago',
-  },
-];
-
 export const NotificationsModal = ({ visible, onClose }: Props) => {
+  const { isGuest } = useAuth();
+  const { data, isLoading } = useGetNotifications(!isGuest && visible);
+  const { mutate: markRead } = useMarkNotificationRead();
+
+  const notifications: TNotification[] = (data as any)?.data?.notifications ?? [];
+  const unreadCount: number = (data as any)?.data?.unreadCount ?? 0;
+
+  const handlePress = (n: TNotification) => {
+    if (!n.isRead) {
+      markRead(n.id);
+    }
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -76,6 +55,11 @@ export const NotificationsModal = ({ visible, onClose }: Props) => {
                 <View style={styles.headerLeft}>
                   <Bell size={20} color="#111" />
                   <Text style={styles.title}>Notifications</Text>
+                  {unreadCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{unreadCount}</Text>
+                    </View>
+                  )}
                 </View>
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                   <X size={20} color="#666" />
@@ -87,29 +71,42 @@ export const NotificationsModal = ({ visible, onClose }: Props) => {
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
               >
-                {SAMPLE_NOTIFICATIONS.map((n) => (
-                  <TouchableOpacity
-                    key={n.id}
-                    style={[styles.item, n.unread && styles.itemUnread]}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.iconWrap}>
-                      <Text style={{ fontSize: 22 }}>{n.icon}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.itemTopRow}>
-                        <Text style={styles.itemTitle}>{n.title}</Text>
-                        {n.unread && <View style={styles.dot} />}
+                {isLoading ? (
+                  <View style={styles.empty}>
+                    <ActivityIndicator size="small" color="#F5A623" />
+                  </View>
+                ) : isGuest ? (
+                  <View style={styles.empty}>
+                    <Text style={styles.emptyText}>Sign in to see notifications</Text>
+                  </View>
+                ) : notifications.length === 0 ? (
+                  <View style={styles.empty}>
+                    <Text style={{ fontSize: 36, marginBottom: 8 }}>🔔</Text>
+                    <Text style={styles.emptyTitle}>No notifications yet</Text>
+                    <Text style={styles.emptyText}>Notifications from admin will appear here</Text>
+                  </View>
+                ) : (
+                  notifications.map((n) => (
+                    <TouchableOpacity
+                      key={n.id}
+                      style={[styles.item, !n.isRead && styles.itemUnread]}
+                      activeOpacity={0.8}
+                      onPress={() => handlePress(n)}
+                    >
+                      <View style={styles.iconWrap}>
+                        <Text style={{ fontSize: 22 }}>{n.icon || '🔔'}</Text>
                       </View>
-                      <Text style={styles.itemMsg}>{n.message}</Text>
-                      <Text style={styles.itemTime}>{n.time}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-
-                <View style={styles.empty}>
-                  <Text style={styles.emptyText}>You're all caught up 🎉</Text>
-                </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.itemTopRow}>
+                          <Text style={styles.itemTitle} numberOfLines={1}>{n.title}</Text>
+                          {!n.isRead && <View style={styles.dot} />}
+                        </View>
+                        <Text style={styles.itemMsg} numberOfLines={3}>{n.message}</Text>
+                        <Text style={styles.itemTime}>{timeAgo(n.createdAt)}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
               </ScrollView>
             </View>
           </TouchableWithoutFeedback>
@@ -143,6 +140,11 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 18, fontWeight: '800', color: '#111' },
+  badge: {
+    backgroundColor: '#EF4444', borderRadius: 10,
+    paddingHorizontal: 7, paddingVertical: 2, marginLeft: 4,
+  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   closeBtn: {
     width: 32,
     height: 32,
@@ -179,7 +181,8 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#92400E' },
   itemMsg: { fontSize: 12, color: '#555', lineHeight: 16, marginBottom: 4 },
   itemTime: { fontSize: 10, color: '#999', fontWeight: '600' },
-  empty: { alignItems: 'center', paddingVertical: 16 },
+  empty: { alignItems: 'center', paddingVertical: 40 },
+  emptyTitle: { fontSize: 15, fontWeight: '800', color: '#111', marginBottom: 4 },
   emptyText: { fontSize: 12, color: '#999' },
 });
 

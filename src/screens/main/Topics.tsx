@@ -30,6 +30,7 @@ type TopicsScreenProps = {
       subjectTitle?: string;
       chapterNumber?: number;
       featureName?: string;
+      freeOnly?: boolean;
     };
   };
 };
@@ -56,6 +57,7 @@ const Topics = ({ navigation, route }: TopicsScreenProps) => {
   const subjectTitle = route?.params?.subjectTitle;
   const chapterNumber = route?.params?.chapterNumber;
   const featureName = route?.params?.featureName;
+  const freeOnly = route?.params?.freeOnly ?? false;
 
   const { isGuest, user } = useAuth();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -77,9 +79,12 @@ const Topics = ({ navigation, route }: TopicsScreenProps) => {
   );
   const { isLoading: favoritesLoading } = useGetFavorites({ enabled: !isGuest });
 
-  const topicsList: TTopic[] = isGuest
+  const allTopics: TTopic[] = isGuest
     ? getGuestTopicsByChapterAndSubject(chapterId, subjectId)
     : data?.data || [];
+  const topicsList: TTopic[] = freeOnly
+    ? allTopics.filter((t) => !isPremiumServiceType(t.serviceType))
+    : allTopics;
 
   const { isCompleted, getCompletedCount, setChapterTopics } = useProgress();
 
@@ -157,10 +162,10 @@ const Topics = ({ navigation, route }: TopicsScreenProps) => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.bannerTitle}>
-                {completedCount} of {topicsList.length} lessons done
+                {completedCount} of {topicsList.length} topics done
               </Text>
               <Text style={styles.bannerSub}>
-                {topicsList.length - completedCount} lessons left to finish chapter
+                {topicsList.length - completedCount} topics left to finish chapter
               </Text>
             </View>
             <Text style={styles.bannerStat}>{progressPct}%</Text>
@@ -189,20 +194,12 @@ const Topics = ({ navigation, route }: TopicsScreenProps) => {
                   activeOpacity={0.85}
                   onPress={() => handleTopicPress(topic)}
                 >
-                  <View style={[styles.thumb, { backgroundColor: grad[1] }]}>
-                    <Text style={styles.thumbEmoji}>{THUMB_EMOJIS[emojiIdx]}</Text>
-                    <View style={styles.playOverlay}>
-                      <Text style={styles.playIcon}>▶</Text>
-                    </View>
-                    {isPremium && (
-                      <View style={styles.lockBadge}>
-                        <Lock size={10} color="#fff" strokeWidth={3} />
-                      </View>
-                    )}
+                  <View style={styles.lessonNum}>
+                    <Text style={styles.lessonNumText}>{String(i + 1).padStart(2, '0')}</Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.lessonTitle} numberOfLines={2}>
-                      Lesson {i + 1} · {topic.name}
+                      Topic {i + 1} · {topic.name}
                     </Text>
                     <View style={styles.lessonMeta}>
                       <Text style={styles.metaText}>⏱ {(emojiIdx + 6)} min</Text>
@@ -332,19 +329,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  thumb: {
-    width: 60, height: 60, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-    position: 'relative',
-  },
-  thumbEmoji: { fontSize: 26 },
-  playOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(146,64,14,0.4)',
-    borderRadius: 12,
+  lessonNum: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: '#FFB74D',
     alignItems: 'center', justifyContent: 'center',
   },
-  playIcon: { color: '#fff', fontSize: 18 },
+  lessonNumText: { color: '#fff', fontSize: 15, fontWeight: '900' },
   lessonTitle: { fontSize: 13, fontWeight: '800', color: '#111', marginBottom: 3 },
   lessonMeta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   metaText: { fontSize: 10.5, color: '#777' },

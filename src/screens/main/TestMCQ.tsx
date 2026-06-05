@@ -44,6 +44,8 @@ type TestMCQProps = {
       chapterName?: string;
       chapterNum?: string;
       totalTime?: number;
+      featureType?: string;
+      questionType?: string;
     };
   };
 };
@@ -86,13 +88,20 @@ export const TestMCQ = ({ navigation, route }: TestMCQProps) => {
   const chapterName = route?.params?.chapterName || '';
   const chapterNum  = route?.params?.chapterNum  || '';
   const totalTime   = route?.params?.totalTime   || 30 * 60;
+  const featureType = route?.params?.featureType || '';
+  const questionType = route?.params?.questionType || '';
 
   const { data, isLoading, error } = useGetQuestions(
-    { chapterId, subjectId, classId },
-    { enabled: Boolean(chapterId && subjectId && classId) }
+    { chapterId: chapterId || undefined, subjectId, classId, featureType: featureType || undefined },
+    { enabled: Boolean(subjectId && classId) }
   );
 
-  const apiQuestions: MCQQuestion[] = (data?.data || []).map((q) =>
+  // Filter by questionType if provided
+  const filteredByType = questionType
+    ? (data?.data || []).filter((q: any) => (q.questionType || 'MCQ') === questionType)
+    : (data?.data || []);
+
+  const apiQuestions: MCQQuestion[] = filteredByType.map((q: any) =>
     mapToMCQ(q, subjectEmoji, chapterName, chapterNum)
   );
 

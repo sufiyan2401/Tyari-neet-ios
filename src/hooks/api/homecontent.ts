@@ -7,7 +7,9 @@ export const useGetHomeContent = (section?: string) => {
     queryFn: async () => {
       const params = section ? `?section=${section}` : '';
       const res = await api.get(`/api/v1/home-content${params}`);
-      return res.data;
+      // api interceptor returns response.data → res = {data: [...]}
+      // return the whole object so Home.tsx can do homeContent.data
+      return res;
     },
     staleTime: 30 * 1000, // 30s — quick reflect of admin toggles
     refetchOnMount: true,

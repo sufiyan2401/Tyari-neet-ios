@@ -8,25 +8,29 @@ import { useProgress } from '@/hooks/useProgress';
 import { useStreak } from '@/hooks/useStreak';
 import { useGetHomeContent } from '@/hooks/api/homecontent';
 import { useContentProtection } from '@/hooks/useContentProtection';
+import { useGetLeaderboard, useGetMyScores } from '@/hooks/api/leaderboard';
 import type { TFeatureType } from '@/hooks/api/topics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Bell } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import {
   Dimensions,
+  FlatList,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const heroBanner = require('../../../assets/hero-banner.jpg');
+const defaultHeroBanner = require('../../../assets/hero-new.png');
 const avatarLogo = require('../../../assets/icon.png');
-const footerImage = require('../../../assets/footer.png');
+const defaultFooterImage = require('../../../assets/footer.png');
 
 const { width } = Dimensions.get('window');
 
@@ -64,16 +68,32 @@ const FEATURE_TYPE_BY_INDEX: TFeatureType[] = [
   'chapter_checkpoint',
 ];
 
-const DEFAULT_TESTS = [
-  { icon: '📅', name: 'Daily Practice Test', desc: 'Everyday concept strengthening', bg: '#E8F5E9', btn: '#2E7D32' },
-  { icon: '📊', name: 'Weekly Test', desc: 'Revision + performance tracking', bg: '#E3F2FD', btn: '#1565C0' },
-  { icon: '📄', name: 'Full Syllabus Test', desc: 'Real exam simulation', bg: '#F3E5F5', btn: '#6A1B9A' },
-];
 
 export const Home = ({ navigation }: HomeScreenProps) => {
   const { isGuest } = useAuth();
   const { data: profile } = useGetProfile({ enabled: !isGuest });
   const { data: homeContent, isSuccess: homeContentLoaded } = useGetHomeContent();
+  const { data: leaderboardData } = useGetLeaderboard('weekly', 50);
+  const { data: myScoresData } = useGetMyScores(!isGuest);
+
+  const heroImageUrl = useMemo(() => {
+    if (homeContentLoaded && Array.isArray(homeContent?.data)) {
+      const hero = homeContent.data.find((i: any) => i.section === 'hero' && i.isActive && i.imageUrl);
+      if (hero?.imageUrl) return hero.imageUrl;
+    }
+    return null;
+  }, [homeContent, homeContentLoaded]);
+
+  const footerImageUrl = useMemo(() => {
+    if (homeContentLoaded && Array.isArray(homeContent?.data)) {
+      const footer = homeContent.data.find((i: any) => i.section === 'footer' && i.isActive && i.imageUrl);
+      if (footer?.imageUrl) return footer.imageUrl;
+    }
+    return null;
+  }, [homeContent, homeContentLoaded]);
+
+  const heroBanner = heroImageUrl ? { uri: heroImageUrl } : defaultHeroBanner;
+  const footerImage = footerImageUrl ? { uri: footerImageUrl } : defaultFooterImage;
 
   const FEATURES = useMemo(() => {
     // Trust API once it has responded — empty array means admin hid them all.
@@ -93,20 +113,6 @@ export const Home = ({ navigation }: HomeScreenProps) => {
     return DEFAULT_FEATURES;
   }, [homeContent, homeContentLoaded]);
 
-  const TESTS = useMemo(() => {
-    if (homeContentLoaded && Array.isArray(homeContent?.data)) {
-      const apiTests = homeContent.data
-        .filter((i: any) => i.section === 'test' && i.isActive !== false);
-      return apiTests.map((t: any) => ({
-        icon: t.icon || '📋',
-        name: t.title,
-        desc: t.description || '',
-        bg: t.bgColor || '#E8F5E9',
-        btn: t.btnColor || '#2E7D32',
-      }));
-    }
-    return DEFAULT_TESTS;
-  }, [homeContent, homeContentLoaded]);
 
   const displayName = isGuest
     ? 'Future Doctor'
@@ -115,7 +121,7 @@ export const Home = ({ navigation }: HomeScreenProps) => {
       : 'Future Doctor';
 
   const goToFreeContent = () => {
-    navigation.navigate('MainTabs', { screen: 'SubjectsTab' });
+    navigation.navigate('SubjectSelect', { freeOnly: true });
   };
 
   useContentProtection({ key: 'home-screen' });
@@ -124,31 +130,36 @@ export const Home = ({ navigation }: HomeScreenProps) => {
   const { currentStreak, longestStreak, visitedDates, totalDaysStudied } = useStreak();
   const [streakModalOpen, setStreakModalOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [progressModal, setProgressModal] = useState<'topics' | 'studytime' | null>(null);
   const [activeFeature, setActiveFeature] = useState<(FeatureDetail & { featureType?: TFeatureType }) | null>(null);
 
   const handleFeatureStart = () => {
     if (activeFeature?.featureType) {
       setActiveFeatureType(activeFeature.featureType);
     }
+    const fname = activeFeature?.name || '';
+    const ftype = activeFeature?.featureType || 'explanation';
     setActiveFeature(null);
-    navigation.navigate('MainTabs', { screen: 'SubjectsTab' });
+    navigation.navigate('FeatureContent', { featureType: ftype, featureName: fname });
   };
 
-  const { completedTopics } = useProgress();
+  const { completedTopics, topicNames } = useProgress();
   const studyStats = useMemo(() => {
     const covered = completedTopics.length;
-    // Each topic counts as ~10 min of study time (rough estimate)
-    const totalMinutes = covered * 10;
+    const myScores: any[] = (myScoresData as any)?.data ?? [];
+    const totalSeconds = myScores.reduce((sum: number, s: any) => sum + (s.timeTaken ?? 0), 0);
+    const totalMinutes = Math.round(totalSeconds / 60);
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
     const studyTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-    // Accuracy is a placeholder (no test data yet) — show "—" until tests are added.
+    const testsPlayed = myScores.length;
     return {
       covered,
       studyTime,
-      hasData: covered > 0,
+      testsPlayed,
+      hasData: covered > 0 || testsPlayed > 0,
     };
-  }, [completedTopics]);
+  }, [completedTopics, myScoresData]);
 
   return (
     <LinearGradient
@@ -225,6 +236,7 @@ export const Home = ({ navigation }: HomeScreenProps) => {
             </View>
           </View>
 
+
           {/* 3 Levels of Test */}
           <View style={styles.section}>
             <View style={styles.secRow}>
@@ -234,7 +246,11 @@ export const Home = ({ navigation }: HomeScreenProps) => {
               </View>
             </View>
             <View style={styles.testGrid}>
-              {TESTS.map((t, i) => (
+              {[
+                { icon: '📅', name: 'Daily Practice Test', desc: 'Everyday concept strengthening', bg: '#E8F5E9', btn: '#2E7D32' },
+                { icon: '📊', name: 'Weekly Test', desc: 'Revision + performance tracking', bg: '#E3F2FD', btn: '#1565C0' },
+                { icon: '📄', name: 'Full Syllabus Test', desc: 'Real exam simulation', bg: '#F3E5F5', btn: '#6A1B9A' },
+              ].map((t, i) => (
                 <TouchableOpacity
                   key={i}
                   style={[styles.testCard, { backgroundColor: t.bg }]}
@@ -252,32 +268,106 @@ export const Home = ({ navigation }: HomeScreenProps) => {
             </View>
           </View>
 
+          {/* Ranking Board */}
+          <View style={styles.section}>
+            <View style={styles.secRow}>
+              <View style={styles.secTitleWrap}>
+                <Text style={styles.pulseIcon}>🏆</Text>
+                <Text style={styles.secTitle}>Weekly Rankings</Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('Leaderboard')}>
+                <Text style={styles.viewAll}>View All →</Text>
+              </TouchableOpacity>
+            </View>
+            {(() => {
+              const entries = (leaderboardData as any)?.data ?? [];
+              if (entries.length === 0) {
+                return (
+                  <View style={styles.lbEmpty}>
+                    <Text style={{ fontSize: 36, marginBottom: 8 }}>🎯</Text>
+                    <Text style={styles.lbEmptyTitle}>No rankings yet!</Text>
+                    <Text style={styles.lbEmptyText}>Take a test this week to appear on the leaderboard</Text>
+                  </View>
+                );
+              }
+              const MEDAL_DATA = [
+                { medal: '🥇', bg: ['#FFF8DC', '#FFD700'] as [string,string], border: '#FFD700', rankColor: '#B8860B' },
+                { medal: '🥈', bg: ['#F5F5F5', '#C0C0C0'] as [string,string], border: '#C0C0C0', rankColor: '#708090' },
+                { medal: '🥉', bg: ['#FFF0E6', '#CD7F32'] as [string,string], border: '#CD7F32', rankColor: '#8B4513' },
+              ];
+              const AVATAR_COLORS = ['#F6C228', '#4CAF50', '#2196F3', '#E91E63', '#9C27B0'];
+              return (
+                <View style={styles.lbWrap}>
+                  {/* Top 3 podium */}
+                  {entries.slice(0, 3).map((entry: any, i: number) => {
+                    const md = MEDAL_DATA[i];
+                    return (
+                      <LinearGradient
+                        key={entry.userId}
+                        colors={md.bg}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        style={[styles.lbTopRow, { borderColor: md.border }]}
+                      >
+                        <Text style={styles.lbTopMedal}>{md.medal}</Text>
+                        <View style={[styles.lbTopAvatar, { backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }]}>
+                          <Text style={styles.lbTopAvatarText}>
+                            {(entry.User?.name || 'U').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.lbTopName} numberOfLines={1}>
+                            {entry.User?.name || 'Student'}
+                          </Text>
+                          <Text style={styles.lbTopSub}>{entry.testsPlayed} tests · {Math.round(entry.avgPercentage ?? 0)}% avg</Text>
+                        </View>
+                        <View style={styles.lbTopScoreWrap}>
+                          <Text style={[styles.lbTopScore, { color: md.rankColor }]}>{Math.round(entry.totalScore ?? 0)}</Text>
+                          <Text style={[styles.lbTopPts, { color: md.rankColor }]}>pts</Text>
+                        </View>
+                      </LinearGradient>
+                    );
+                  })}
+                  {/* Ranks 4-5 */}
+                  {entries.slice(3, 5).map((entry: any, i: number) => (
+                    <View key={entry.userId} style={styles.lbRow}>
+                      <View style={styles.lbRankBadge}>
+                        <Text style={styles.lbRankNum}>#{i + 4}</Text>
+                      </View>
+                      <View style={[styles.lbAvatar, { backgroundColor: AVATAR_COLORS[(i + 3) % AVATAR_COLORS.length] }]}>
+                        <Text style={styles.lbAvatarText}>
+                          {(entry.User?.name || 'U').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.lbName} numberOfLines={1}>{entry.User?.name || 'Student'}</Text>
+                        <Text style={styles.lbSub}>{entry.testsPlayed} tests · {Math.round(entry.avgPercentage ?? 0)}% avg</Text>
+                      </View>
+                      <Text style={styles.lbScore}>{Math.round(entry.totalScore ?? 0)} pts</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+          </View>
+
           {/* Study Progress */}
           <View style={styles.section}>
             <View style={styles.secRow}>
               <Text style={styles.secTitle}>Your Study Progress</Text>
             </View>
             <View style={styles.progGrid}>
-              <TouchableOpacity style={styles.progCard} activeOpacity={0.85} onPress={goToFreeContent}>
+              <TouchableOpacity style={styles.progCard} activeOpacity={0.85} onPress={() => setProgressModal('topics')}>
                 <Text style={styles.pIco}>📖</Text>
                 <Text style={styles.pLabel}>Topics Covered</Text>
                 <Text style={styles.pVal}>{studyStats.covered}</Text>
                 <Text style={styles.pSub}>
-                  {studyStats.hasData ? 'lessons read' : 'start learning'}
+                  {studyStats.covered > 0 ? 'topics read' : 'start learning'}
                 </Text>
                 <View style={styles.pBar}>
-                  <View
-                    style={[
-                      styles.pFill,
-                      {
-                        backgroundColor: '#EF5350',
-                        width: studyStats.hasData ? '100%' : '0%',
-                      },
-                    ]}
-                  />
+                  <View style={[styles.pFill, { backgroundColor: '#EF5350', width: `${Math.min(studyStats.covered * 2, 100)}%` }]} />
                 </View>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.progCard} activeOpacity={0.85} onPress={goToFreeContent}>
+              <TouchableOpacity style={styles.progCard} activeOpacity={0.85} onPress={() => setStreakModalOpen(true)}>
                 <Text style={styles.pIco}>🔥</Text>
                 <Text style={styles.pLabel}>Day Streak</Text>
                 <Text style={styles.pVal}>{currentStreak}</Text>
@@ -285,32 +375,16 @@ export const Home = ({ navigation }: HomeScreenProps) => {
                   {currentStreak > 0 ? 'Keep it up!' : 'start today'}
                 </Text>
                 <View style={styles.pBar}>
-                  <View
-                    style={[
-                      styles.pFill,
-                      {
-                        backgroundColor: '#43A047',
-                        width: `${Math.min(currentStreak * 10, 100)}%`,
-                      },
-                    ]}
-                  />
+                  <View style={[styles.pFill, { backgroundColor: '#43A047', width: `${Math.min(currentStreak * 10, 100)}%` }]} />
                 </View>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.progCard} activeOpacity={0.85} onPress={goToFreeContent}>
+              <TouchableOpacity style={styles.progCard} activeOpacity={0.85} onPress={() => setProgressModal('studytime')}>
                 <Text style={styles.pIco}>🕐</Text>
                 <Text style={styles.pLabel}>Study Time</Text>
                 <Text style={[styles.pVal, { fontSize: 16 }]}>{studyStats.studyTime}</Text>
-                <Text style={styles.pSub}>{studyStats.hasData ? 'total' : 'no time yet'}</Text>
+                <Text style={styles.pSub}>{studyStats.testsPlayed > 0 ? `${studyStats.testsPlayed} tests` : 'no tests yet'}</Text>
                 <View style={styles.pBar}>
-                  <View
-                    style={[
-                      styles.pFill,
-                      {
-                        backgroundColor: '#92400E',
-                        width: studyStats.hasData ? '100%' : '0%',
-                      },
-                    ]}
-                  />
+                  <View style={[styles.pFill, { backgroundColor: '#92400E', width: `${Math.min(studyStats.testsPlayed * 5, 100)}%` }]} />
                 </View>
               </TouchableOpacity>
             </View>
@@ -320,7 +394,6 @@ export const Home = ({ navigation }: HomeScreenProps) => {
           <TouchableOpacity activeOpacity={0.9} onPress={goToFreeContent} style={styles.footerWrap}>
             <Image source={footerImage} style={styles.footerImg} />
           </TouchableOpacity>
-          <View style={{ height: 20, backgroundColor: '#fff' }} />
       </View>
       </ScrollView>
 
@@ -344,6 +417,81 @@ export const Home = ({ navigation }: HomeScreenProps) => {
         onClose={() => setActiveFeature(null)}
         onStart={handleFeatureStart}
       />
+
+      {/* Progress Detail Modal */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={progressModal !== null}
+        onRequestClose={() => setProgressModal(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setProgressModal(null)}>
+          <View style={styles.pmBackdrop}>
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+              <View style={styles.pmSheet}>
+                <View style={styles.pmGrip} />
+                {progressModal === 'topics' && (
+                  <>
+                    <Text style={styles.pmTitle}>📖 Topics Covered</Text>
+                    <Text style={styles.pmSub}>{completedTopics.length} lessons completed</Text>
+                    {completedTopics.length === 0 ? (
+                      <View style={styles.pmEmpty}>
+                        <Text style={styles.pmEmptyText}>No topics covered yet. Start reading to track your progress!</Text>
+                      </View>
+                    ) : (
+                      <ScrollView style={styles.pmList} showsVerticalScrollIndicator={false}>
+                        {completedTopics.map((id, i) => (
+                          <View key={id} style={styles.pmItem}>
+                            <View style={styles.pmItemNum}><Text style={styles.pmItemNumText}>{i + 1}</Text></View>
+                            <Text style={styles.pmItemText} numberOfLines={1}>{topicNames[id] || `Topic ${i + 1}`}</Text>
+                            <Text style={styles.pmItemCheck}>✓</Text>
+                          </View>
+                        ))}
+                      </ScrollView>
+                    )}
+                  </>
+                )}
+                {progressModal === 'studytime' && (() => {
+                  const myScores: any[] = (myScoresData as any)?.data ?? [];
+                  const totalSec = myScores.reduce((s: number, t: any) => s + (t.timeTaken ?? 0), 0);
+                  const h = Math.floor(totalSec / 3600);
+                  const m = Math.floor((totalSec % 3600) / 60);
+                  return (
+                    <>
+                      <Text style={styles.pmTitle}>🕐 Study Time</Text>
+                      <Text style={styles.pmSub}>{h > 0 ? `${h}h ${m}m` : `${m}m`} total · {myScores.length} tests played</Text>
+                      {myScores.length === 0 ? (
+                        <View style={styles.pmEmpty}>
+                          <Text style={styles.pmEmptyText}>No tests taken yet. Take a test to see your study time!</Text>
+                        </View>
+                      ) : (
+                        <ScrollView style={styles.pmList} showsVerticalScrollIndicator={false}>
+                          {myScores.slice(0, 20).map((s: any, i: number) => {
+                            const mins = Math.round((s.timeTaken ?? 0) / 60);
+                            const date = new Date(s.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                            return (
+                              <View key={s.id || i} style={styles.pmItem}>
+                                <View style={[styles.pmItemNum, { backgroundColor: '#92400E' }]}><Text style={styles.pmItemNumText}>{mins}m</Text></View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.pmItemText} numberOfLines={1}>{s.Subject?.name || s.testType || 'Test'}</Text>
+                                  <Text style={styles.pmItemSub}>{date} · {s.correctAnswers}/{s.totalQuestions} correct · {Math.round(s.percentage)}%</Text>
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </ScrollView>
+                      )}
+                    </>
+                  );
+                })()}
+                <TouchableOpacity style={styles.pmCloseBtn} onPress={() => setProgressModal(null)}>
+                  <Text style={styles.pmCloseBtnText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
     </LinearGradient>
   );
@@ -426,10 +574,9 @@ const styles = StyleSheet.create({
   },
   heroBannerImg: {
     width: width - 28,
-    height: ((width - 28) * 709) / 1600,
+    height: ((width - 28) * 1024) / 1536,
     borderRadius: 14,
-    resizeMode: 'stretch',
-    backgroundColor: '#FCD34D',
+    resizeMode: 'contain',
   },
   cardBody: {
     backgroundColor: '#fff',
@@ -547,6 +694,84 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   qLabel: { fontSize: 9, color: '#444', fontWeight: '600', textAlign: 'center', lineHeight: 12 },
+
+  /* Leaderboard */
+  lbWrap: { gap: 8 },
+  lbTopRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1.5,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+  },
+  lbTopMedal: { fontSize: 26, width: 30 },
+  lbTopAvatar: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15, shadowRadius: 4, elevation: 2,
+  },
+  lbTopAvatarText: { fontSize: 16, fontWeight: '900', color: '#fff' },
+  lbTopName: { fontSize: 13, fontWeight: '900', color: '#111' },
+  lbTopSub: { fontSize: 10, color: '#666', marginTop: 1 },
+  lbTopScoreWrap: { alignItems: 'flex-end' },
+  lbTopScore: { fontSize: 18, fontWeight: '900' },
+  lbTopPts: { fontSize: 9, fontWeight: '700', marginTop: -2 },
+  lbRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fff', borderRadius: 14,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderWidth: 1, borderColor: '#f0f0f0',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
+  lbRankBadge: {
+    width: 30, height: 30, borderRadius: 10,
+    backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center',
+  },
+  lbRankNum: { fontSize: 11, fontWeight: '900', color: '#555' },
+  lbAvatar: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  lbAvatarText: { fontSize: 14, fontWeight: '900', color: '#fff' },
+  lbName: { fontSize: 12, fontWeight: '800', color: '#111' },
+  lbSub: { fontSize: 10, color: '#888', marginTop: 1 },
+  lbScore: { fontSize: 13, fontWeight: '900', color: '#92400E' },
+  lbEmpty: {
+    backgroundColor: '#fff', borderRadius: 18, paddingVertical: 32,
+    alignItems: 'center', borderWidth: 1, borderColor: '#f0f0f0',
+  },
+  lbEmptyTitle: { fontSize: 14, fontWeight: '900', color: '#111', marginBottom: 4 },
+  lbEmptyText: { fontSize: 11, color: '#999', textAlign: 'center', paddingHorizontal: 20 },
+
+  /* Progress Modal */
+  pmBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  pmSheet: {
+    backgroundColor: '#FFF8E8', borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 30, maxHeight: '70%',
+  },
+  pmGrip: { width: 40, height: 4, borderRadius: 4, backgroundColor: '#ddd', alignSelf: 'center', marginBottom: 14 },
+  pmTitle: { fontSize: 18, fontWeight: '900', color: '#111', textAlign: 'center', marginBottom: 4 },
+  pmSub: { fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 14 },
+  pmEmpty: { paddingVertical: 30, alignItems: 'center' },
+  pmEmptyText: { fontSize: 12, color: '#999', textAlign: 'center' },
+  pmList: { maxHeight: 300 },
+  pmItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8,
+    borderWidth: 1, borderColor: '#f0f0f0',
+  },
+  pmItemNum: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: '#F6C228',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pmItemNumText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  pmItemText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#111' },
+  pmItemSub: { fontSize: 10, color: '#888', marginTop: 1 },
+  pmItemCheck: { fontSize: 14, fontWeight: '900', color: '#2E7D32' },
+  pmCloseBtn: { backgroundColor: '#111', borderRadius: 14, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
+  pmCloseBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
 
   /* Footer */
   footerWrap: {

@@ -15,13 +15,15 @@ type Props = {
   protectedContent?: boolean;
 };
 
-const shouldBlockNavigation = (url: string): boolean => {
+const shouldBlockNavigation = (url: string, sourceUrl?: string): boolean => {
   const lower = String(url || '').toLowerCase();
   const clean = lower.split('#')[0].split('?')[0];
 
-  // Block common file downloads.
+  // Allow the initial source URL (even if it's a PDF)
+  if (sourceUrl && lower === String(sourceUrl).toLowerCase()) return false;
+
+  // Block common file downloads (except the source itself).
   const blockedExts = [
-    '.pdf',
     '.zip',
     '.rar',
     '.7z',
@@ -57,14 +59,36 @@ const PROTECT_JS = `
   try {
     var style = document.createElement('style');
     style.type = 'text/css';
-    style.innerHTML = '*{ -webkit-user-select:none !important; user-select:none !important; -webkit-touch-callout:none !important; }';
+    style.innerHTML = '*{ -webkit-user-select:none !important; user-select:none !important; -webkit-touch-callout:none !important; } img{ pointer-events:none !important; -webkit-user-drag:none !important; } @media print{ body{display:none !important;} } [aria-label="Enter fullscreen"],[aria-label="Exit fullscreen"],[aria-label="Fullscreen"],button[class*="fullscreen"],button[class*="Fullscreen"],.fullscreen-button,.fs-button,[data-testid="fullscreen-button"]{ display:none !important; visibility:hidden !important; } ::-webkit-media-controls-fullscreen-button{ display:none !important; }';
     document.documentElement.appendChild(style);
 
-    document.addEventListener('contextmenu', function (e) { e.preventDefault(); }, { capture: true });
-    document.addEventListener('copy', function (e) { e.preventDefault(); }, { capture: true });
-    document.addEventListener('cut', function (e) { e.preventDefault(); }, { capture: true });
-    document.addEventListener('paste', function (e) { e.preventDefault(); }, { capture: true });
-    document.addEventListener('dragstart', function (e) { e.preventDefault(); }, { capture: true });
+    var events = ['contextmenu','copy','cut','paste','dragstart','selectstart','beforeprint'];
+    events.forEach(function(evt){
+      document.addEventListener(evt, function(e){ e.preventDefault(); e.stopPropagation(); return false; }, { capture: true });
+    });
+
+    // Block long press on images
+    document.addEventListener('touchstart', function(e){
+      if(e.target && e.target.tagName === 'IMG') { e.target.style.pointerEvents='none'; }
+    }, { capture: true, passive: false });
+
+    // Block text selection via touch
+    document.addEventListener('selectionchange', function(){
+      try { window.getSelection().removeAllRanges(); } catch(x){}
+    });
+
+    // Disable developer tools
+    document.addEventListener('keydown', function(e){
+      if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&(e.key==='I'||e.key==='J'||e.key==='C'))||(e.ctrlKey&&e.key==='u')){e.preventDefault();}
+    }, { capture: true });
+
+    // Hide fullscreen buttons (Canva etc)
+    setInterval(function(){
+      try{
+        var btns = document.querySelectorAll('[aria-label*="fullscreen"],[aria-label*="Fullscreen"],button[class*="fullscreen"],button[class*="Fullscreen"]');
+        btns.forEach(function(b){ b.style.display='none'; });
+      }catch(x){}
+    }, 1000);
   } catch (e) {}
   true;
 })();`;
@@ -115,6 +139,7 @@ export default function PlatformWebView({
   const debugEnabled = Boolean(enableDebugLogs);
   const injectedJS = buildInjectedJavaScript(Boolean(protectedContent), debugEnabled);
   const debugPrefix = debugLabel ? `[PlatformWebView:${debugLabel}]` : '[PlatformWebView]';
+  const sourceUrl = 'uri' in source ? source.uri : undefined;
 
   if (Platform.OS === 'web') {
     // For web, render an iframe for uri sources, or simple HTML wrapper for html
@@ -153,8 +178,14 @@ export default function PlatformWebView({
         style={style}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        allowsFullscreenVideo={true}
+        allowsFullscreenVideo={false}
         startInLoadingState={true}
+        renderLoading={() => (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#F6C228', borderTopColor: 'transparent' }} />
+            <Text style={{ marginTop: 10, fontSize: 12, color: '#999' }}>Loading...</Text>
+          </View>
+        )}
         originWhitelist={['*']}
         mixedContentMode="always"
         allowFileAccess={true}
@@ -162,11 +193,16 @@ export default function PlatformWebView({
         thirdPartyCookiesEnabled={true}
         sharedCookiesEnabled={true}
         cacheEnabled={true}
+        cacheMode="LOAD_CACHE_ELSE_NETWORK"
         userAgent={isCanvaUri ? canvaCompatibleUserAgent : undefined}
+        scalesPageToFit={true}
         injectedJavaScriptBeforeContentLoaded={injectedJS}
         injectedJavaScript={injectedJS}
         setSupportMultipleWindows={false}
         allowsLinkPreview={false}
+        textZoom={100}
+        decelerationRate="fast"
+        overScrollMode="never"
         onLoadStart={(event: any) => {
           if (!debugEnabled || !__DEV__) return;
           console.log(`${debugPrefix}[LoadStart]`, {
@@ -224,7 +260,7 @@ export default function PlatformWebView({
                 // pages (e.g. Canva) don't show broken placeholders. Only gate top-frame
                 // navigations / downloads.
                 if (!isTopFrameRequest(req)) return true;
-                if (shouldBlockNavigation(url)) {
+                if (shouldBlockNavigation(url, sourceUrl)) {
                   Alert.alert('Blocked', 'Downloads are disabled.');
                   return false;
                 }

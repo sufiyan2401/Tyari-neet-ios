@@ -8,9 +8,11 @@ type ProgressData = {
   completedTopics: string[];
   /** chapterId -> total topic count seen */
   chapterTotals: Record<string, number>;
+  /** topicId -> topic name */
+  topicNames: Record<string, string>;
 };
 
-const initialData: ProgressData = { completedTopics: [], chapterTotals: {} };
+const initialData: ProgressData = { completedTopics: [], chapterTotals: {}, topicNames: {} };
 
 let cache: ProgressData | null = null;
 const listeners = new Set<(data: ProgressData) => void>();
@@ -25,6 +27,10 @@ const loadFromStorage = async (): Promise<ProgressData> => {
       chapterTotals:
         parsed.chapterTotals && typeof parsed.chapterTotals === 'object'
           ? parsed.chapterTotals
+          : {},
+      topicNames:
+        parsed.topicNames && typeof parsed.topicNames === 'object'
+          ? parsed.topicNames
           : {},
     };
   } catch {
@@ -61,12 +67,15 @@ export const useProgress = () => {
     };
   }, []);
 
-  const markCompleted = useCallback(async (topicId: string) => {
+  const markCompleted = useCallback(async (topicId: string, topicName?: string) => {
     const current = await loadFromStorage();
     if (current.completedTopics.includes(topicId)) return;
     const updated: ProgressData = {
       ...current,
       completedTopics: [...current.completedTopics, topicId],
+      topicNames: topicName
+        ? { ...current.topicNames, [topicId]: topicName }
+        : current.topicNames,
     };
     await saveToStorage(updated);
   }, []);
@@ -103,6 +112,7 @@ export const useProgress = () => {
 
   return {
     completedTopics: data.completedTopics,
+    topicNames: data.topicNames,
     markCompleted,
     isCompleted,
     getCompletedCount,

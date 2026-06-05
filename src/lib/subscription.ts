@@ -13,10 +13,6 @@ export const isPaidSubscriptionActive = (
   if (!Number.isFinite(endMs)) return false;
   if (endMs <= nowMs) return false;
 
-  // Treat zero-amount records as freemium; paid plans have amount > 0.
-  const amount = typeof subscription.amount === 'number' ? subscription.amount : Number(subscription.amount);
-  if (Number.isFinite(amount) && amount <= 0) return false;
-
   return true;
 };
 

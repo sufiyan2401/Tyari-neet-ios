@@ -30,6 +30,8 @@ import Subjects from '../screens/main/Subjects';
 import SubscriptionMessage from '../screens/main/SubscriptionMessage';
 import TermsAndConditions from '../screens/main/TermsAndConditions';
 import DailyTestChapter from '../screens/main/DailyTestChapter';
+import FeatureContent from '../screens/main/FeatureContent';
+import Leaderboard from '../screens/main/Leaderboard';
 import TestMCQ from '../screens/main/TestMCQ';
 import TestResult from '../screens/main/TestResult';
 import Tests from '../screens/main/Tests';
@@ -129,6 +131,8 @@ function MainStack() {
       <Stack.Screen name="Privacy" component={Privacy} />
       <Stack.Screen name="TermsAndConditions" component={TermsAndConditions} />
       <Stack.Screen name="DailyTestChapter" component={DailyTestChapter} />
+      <Stack.Screen name="FeatureContent" component={FeatureContent} />
+      <Stack.Screen name="Leaderboard" component={Leaderboard} />
       <Stack.Screen name="TestMCQ" component={TestMCQ} />
       <Stack.Screen name="TestResult" component={TestResult} />
       <Stack.Screen name="NotFound" component={NotFoundScreen} />

@@ -31,6 +31,10 @@ export const useGetProfile = (options?: TQueryOpts<TUser>) => {
   return useQuery({
     queryKey: ['useGetProfile'],
     queryFn: getProfile,
+    staleTime: 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchInterval: 5 * 60 * 1000, // auto-refresh every 5 min for subscription changes
     ...options,
   });
 };
