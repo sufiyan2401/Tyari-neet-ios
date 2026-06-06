@@ -140,6 +140,7 @@ export default function PlatformWebView({
   const injectedJS = buildInjectedJavaScript(Boolean(protectedContent), debugEnabled);
   const debugPrefix = debugLabel ? `[PlatformWebView:${debugLabel}]` : '[PlatformWebView]';
   const sourceUrl = 'uri' in source ? source.uri : undefined;
+  const webViewDecelerationRate = Platform.OS === 'android' ? 0.99 : 'fast';
 
   if (Platform.OS === 'web') {
     // For web, render an iframe for uri sources, or simple HTML wrapper for html
@@ -201,7 +202,7 @@ export default function PlatformWebView({
         setSupportMultipleWindows={false}
         allowsLinkPreview={false}
         textZoom={100}
-        decelerationRate="fast"
+        decelerationRate={webViewDecelerationRate}
         overScrollMode="never"
         onLoadStart={(event: any) => {
           if (!debugEnabled || !__DEV__) return;
